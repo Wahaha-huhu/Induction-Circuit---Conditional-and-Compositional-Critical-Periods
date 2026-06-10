@@ -17,6 +17,19 @@ def lr_at_step(step: int, optim: OptimConfig, sched: ScheduleConfig) -> float:
         progress = min(1.0, max(0.0, (step - optim.warmup_steps) / denom))
         return optim.final_lr + 0.5 * (optim.peak_lr - optim.final_lr) * (1.0 + math.cos(math.pi * progress))
 
+    if sched.kind == "warmup_cosine_then_rewarm_constant":
+        # C5b-1 rewarm control. Before rewarm_step, follow the same cosine
+        # decay as S1. From rewarm_step onward, restore a constant LR.
+        # This tests whether late failure is just low instantaneous/update LR.
+        rewarm_step = sched.rewarm_step
+        if rewarm_step is None:
+            raise ValueError("warmup_cosine_then_rewarm_constant requires sched.rewarm_step")
+        if step >= rewarm_step:
+            return optim.peak_lr if sched.rewarm_lr is None else sched.rewarm_lr
+        denom = max(1, sched.t_schedule - optim.warmup_steps)
+        progress = min(1.0, max(0.0, (step - optim.warmup_steps) / denom))
+        return optim.final_lr + 0.5 * (optim.peak_lr - optim.final_lr) * (1.0 + math.cos(math.pi * progress))
+
     if sched.kind == "warmup_cyclic":
         # Cosine cycle from peak to cycle_min and back to peak. The canonical
         # introduction phase is the LR peak, which occurs at cycle boundaries.

@@ -27,7 +27,7 @@ def build_configs(args):
         dropout=args.dropout,
     )
     optim = OptimConfig(peak_lr=args.peak_lr, final_lr=args.final_lr, warmup_steps=args.warmup_steps)
-    sched = ScheduleConfig(kind=args.schedule, t_schedule=args.t_schedule, cycle_length=args.cycle_length)
+    sched = ScheduleConfig(kind=args.schedule, t_schedule=args.t_schedule, cycle_length=args.cycle_length, rewarm_step=args.rewarm_step, rewarm_lr=args.rewarm_lr)
 
     intro_step = None
     dynamic_switch_step = None
@@ -114,15 +114,23 @@ def main():
     p.add_argument("--d-mlp", type=int, default=256)
     p.add_argument("--dropout", type=float, default=0.0)
 
-    p.add_argument("--schedule", choices=["warmup_cosine", "warmup_constant", "warmup_cyclic"], default="warmup_cosine")
+    p.add_argument("--schedule", choices=["warmup_cosine", "warmup_constant", "warmup_cyclic", "warmup_cosine_then_rewarm_constant"], default="warmup_cosine")
     p.add_argument("--t-schedule", type=int, default=20000)
     p.add_argument("--cycle-length", type=int, default=2000)
+    p.add_argument("--rewarm-step", type=int, default=None, help="Step where rewarm schedule switches to constant LR; defaults to --intro-step")
+    p.add_argument("--rewarm-lr", type=float, default=None, help="Constant LR after rewarm; defaults to --peak-lr")
     p.add_argument("--peak-lr", type=float, default=5e-4)
     p.add_argument("--final-lr", type=float, default=5e-6)
     p.add_argument("--warmup-steps", type=int, default=500)
     args = p.parse_args()
     if args.torch_threads is not None:
         torch.set_num_threads(args.torch_threads)
+
+    if args.schedule == "warmup_cosine_then_rewarm_constant":
+        if args.rewarm_step is None:
+            if args.intro_step is None:
+                raise ValueError("warmup_cosine_then_rewarm_constant requires --rewarm-step or --intro-step")
+            args.rewarm_step = args.intro_step
 
     cfgs = build_configs(args)
     out = train_run(*cfgs)

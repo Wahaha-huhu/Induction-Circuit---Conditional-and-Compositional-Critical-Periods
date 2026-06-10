@@ -186,3 +186,31 @@ python scripts/pack_results.py \
 ```
 
 Send back the zip file plus any terminal error logs if a run fails before creating a run directory.
+
+
+## C5b-1 rewarm control
+
+This schedule follows `warmup_cosine` before `--intro-step`, then switches to a constant `--rewarm-lr` from `--intro-step` onward. Use this to test whether S1 late failure is due to low instantaneous/update LR.
+
+```bash
+python scripts/run_condition.py \
+  --condition late_gate_post \
+  --seed 0 \
+  --device cuda \
+  --intro-step 16000 \
+  --max-steps 29500 \
+  --t-schedule 30000 \
+  --schedule warmup_cosine_then_rewarm_constant \
+  --rewarm-lr 1e-3 \
+  --v-content 64 \
+  --chain-length 8 \
+  --k-max 2 \
+  --p-multi 0.5 \
+  --batch-size 256 \
+  --eval-interval 50 \
+  --eval-batches 16 \
+  --peak-lr 1e-3 \
+  --out-dir runs/c5b_rewarm_late
+
+python scripts/analyze_run.py runs/c5b_rewarm_late/late_gate_post_seed0
+```

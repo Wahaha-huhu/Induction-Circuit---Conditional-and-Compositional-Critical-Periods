@@ -73,10 +73,14 @@ class OptimConfig:
 
 @dataclass(frozen=True)
 class ScheduleConfig:
-    kind: str = "warmup_cosine"  # warmup_cosine | warmup_constant | warmup_cyclic
+    kind: str = "warmup_cosine"  # warmup_cosine | warmup_constant | warmup_cyclic | warmup_cosine_then_rewarm_constant
     t_schedule: int = 20_000
     cycle_length: int = 2_000
     cycle_min_lr_frac: float = 0.1
+    # C5b-1 rewarm control: use cosine before rewarm_step, then constant rewarm_lr.
+    # If rewarm_lr is None, optim.peak_lr is used.
+    rewarm_step: Optional[int] = None
+    rewarm_lr: Optional[float] = None
 
 
 @dataclass(frozen=True)
