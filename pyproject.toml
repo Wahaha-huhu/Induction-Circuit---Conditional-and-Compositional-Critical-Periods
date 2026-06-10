@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cp-toy"
+version = "0.1.0"
+description = "Controlled toy implementation for conditional/compositional critical-period experiments"
+requires-python = ">=3.10"
+dependencies = ["numpy", "torch"]
+
+[tool.setuptools]
+packages = ["cp_toy"]
