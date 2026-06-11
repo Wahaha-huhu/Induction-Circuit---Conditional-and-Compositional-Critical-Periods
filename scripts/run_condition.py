@@ -12,6 +12,7 @@ from pathlib import Path
 from cp_toy.config import DataConfig, ModelConfig, OptimConfig, ScheduleConfig, TrainConfig
 from cp_toy.train import train_run
 from cp_toy.schedules import next_cyclic_peak_at_or_after
+from cp_toy.summary import print_summary, write_summary
 
 
 def build_configs(args):
@@ -195,6 +196,7 @@ def main():
     p.add_argument("--weight-decay", type=float, default=0.01)
     p.add_argument("--grad-clip", type=float, default=1.0)
     p.add_argument("--log-rank-metrics", action="store_true", help="Log weight/rank/update markers; slower but useful for replications")
+    p.add_argument("--no-final-summary", action="store_true", help="Do not print/save summary.json at end of run")
     args = p.parse_args()
     if args.torch_threads is not None:
         torch.set_num_threads(args.torch_threads)
@@ -202,6 +204,13 @@ def main():
     cfgs = build_configs(args)
     out = train_run(*cfgs)
     print(f"wrote {out}")
+    if not args.no_final_summary:
+        try:
+            summary = write_summary(out)
+            print_summary(summary)
+            print(f"wrote {out / 'summary.json'}")
+        except Exception as exc:
+            print(f"WARNING: failed to summarize run {out}: {exc}")
 
 
 if __name__ == "__main__":

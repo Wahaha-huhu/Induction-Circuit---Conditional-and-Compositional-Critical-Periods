@@ -291,3 +291,19 @@ python scripts/run_ablation_eval.py <RUN_DIR> --device cuda --top-k 2 --batch-si
 ```bash
 python scripts/pack_results.py --runs-dir runs --out cp_toy_replication_specificity.zip
 ```
+
+## v0.5 summary utilities
+
+`run_condition.py` now prints a final summary and writes `summary.json` automatically.
+
+For old runs, run:
+
+```bash
+python scripts/analyze_run.py <run_dir>
+```
+
+For all runs under a directory, run:
+
+```bash
+python scripts/summarize_runs.py --runs-dir runs --out runs/all_run_summaries.csv
+```
