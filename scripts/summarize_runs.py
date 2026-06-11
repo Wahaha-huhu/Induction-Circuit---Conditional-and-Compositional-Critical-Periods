@@ -16,6 +16,11 @@ def find_run_dirs(root: Path) -> List[Path]:
     return sorted(p.parent for p in root.rglob("metrics.jsonl"))
 
 
+def add_flat(flat: Dict[str, Any], prefix: str, d: Dict[str, Any]) -> None:
+    for k, v in d.items():
+        flat[f"{prefix}.{k}"] = v
+
+
 def main():
     p = argparse.ArgumentParser(description="Summarize every run under a runs directory")
     p.add_argument("--runs-dir", default="runs")
@@ -35,9 +40,16 @@ def main():
             "final_step": s["final_step"],
             "n_eval_rows": s["n_eval_rows"],
         }
-        for prefix, d in [("final", s["final_metrics"]), ("tail", s["tail_metrics"]), ("excess", s["excess_over_floor"]), ("trans", s["transitions"] )]:
-            for k, v in d.items():
-                flat[f"{prefix}.{k}"] = v
+        add_flat(flat, "meta", s.get("metadata", {}))
+        add_flat(flat, "intro", s.get("intro_snapshot", {}))
+        add_flat(flat, "tsched", s.get("t_schedule_snapshot", {}))
+        for prefix, d in [
+            ("final", s["final_metrics"]),
+            ("tail", s["tail_metrics"]),
+            ("excess", s["excess_over_floor"]),
+            ("trans", s["transitions"]),
+        ]:
+            add_flat(flat, prefix, d)
         rows.append(flat)
 
     fieldnames = sorted({k for r in rows for k in r.keys()})
