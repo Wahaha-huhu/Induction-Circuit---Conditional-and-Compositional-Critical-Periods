@@ -110,3 +110,22 @@ For the next update, collect:
 |---|---:|---:|---:|---:|---:|---:|---:|
 
 This table connects behavioural results to the geometric mechanism.
+
+## v0.8 path/subspace reachability analysis
+
+After a checkpointed geometry run has been packed with `--include-models`, run:
+
+```bash
+bash scripts/run_reachability_geometry_analysis.sh
+```
+
+This compares every arm to the successful `rewarm_reset` displacement and asks whether failed arms moved in the successful HOP_2-forming direction. It also tests whether adding the successful displacement to each arm's intro checkpoint is sufficient to induce HOP_2.
+
+For a faster CPU check:
+
+```bash
+DEVICE=cpu BATCH_SIZE=64 EVAL_BATCHES=2 \
+OWN_ALPHAS="0,0.5,0.75,0.9,1.0" \
+TARGET_DIRECTION_ALPHAS="0,0.5,1.0" \
+bash scripts/run_reachability_geometry_analysis.sh
+```
