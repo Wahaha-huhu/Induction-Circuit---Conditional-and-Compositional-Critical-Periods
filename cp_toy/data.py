@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -33,13 +33,43 @@ class ChainBatchGenerator:
     The key-slot lookup score uses `key_value_pos`: the value slot in the binding
     [c_s, c_{s+1}, SEP] for the first hop. This avoids the vanilla induction
     ambiguity caused by interior chain tokens also appearing as values.
+
+    Token pools:
+      - all: sample from the full content vocabulary.
+      - base: sample from the first half of the content vocabulary.
+      - fresh: sample from the second half of the content vocabulary.
+
+    The base/fresh split supports the late fresh-single-hop specificity control.
     """
 
     def __init__(self, cfg: DataConfig, seed: int = 0):
         self.cfg = cfg
         self.rng = np.random.default_rng(seed)
         fixed_rng = np.random.default_rng(cfg.fixed_chain_seed)
-        self.fixed_chain = fixed_rng.choice(cfg.v_content, size=cfg.chain_length, replace=False).astype(np.int64)
+        self.fixed_chains = {
+            pool: self._choice_from_pool(fixed_rng, pool, cfg.chain_length)
+            for pool in ("all", "base", "fresh")
+        }
+
+    def _pool_tokens(self, token_pool: str) -> np.ndarray:
+        token_pool = token_pool.lower()
+        if token_pool == "all":
+            lo, hi = 0, self.cfg.v_content
+        elif token_pool == "base":
+            lo, hi = 0, self.cfg.v_content // 2
+        elif token_pool == "fresh":
+            lo, hi = self.cfg.v_content // 2, self.cfg.v_content
+        else:
+            raise ValueError(f"unknown token_pool {token_pool}; expected all|base|fresh")
+        if hi - lo < self.cfg.chain_length:
+            raise ValueError(
+                f"token_pool={token_pool} has only {hi-lo} tokens, less than chain_length={self.cfg.chain_length}"
+            )
+        return np.arange(lo, hi, dtype=np.int64)
+
+    def _choice_from_pool(self, rng: np.random.Generator, token_pool: str, size: int) -> np.ndarray:
+        pool = self._pool_tokens(token_pool)
+        return rng.choice(pool, size=size, replace=False).astype(np.int64)
 
     def _hop_token(self, h: int) -> int:
         return self.cfg.hop_token_offset + h
@@ -54,10 +84,11 @@ class ChainBatchGenerator:
             return self.cfg.query_mem_token
         raise ValueError(f"unknown query marker: {marker}")
 
-    def _sample_chain(self, dynamic: bool) -> np.ndarray:
+    def _sample_chain(self, dynamic: bool, token_pool: str = "all") -> np.ndarray:
+        token_pool = token_pool.lower()
         if dynamic:
-            return self.rng.choice(self.cfg.v_content, size=self.cfg.chain_length, replace=False).astype(np.int64)
-        return self.fixed_chain.copy()
+            return self._choice_from_pool(self.rng, token_pool, self.cfg.chain_length)
+        return self.fixed_chains[token_pool].copy()
 
     def _sample_hop(self, p_multi: float) -> int:
         if self.cfg.k_max <= 1:
@@ -71,12 +102,13 @@ class ChainBatchGenerator:
         p_dynamic: float,
         p_multi: float,
         query_marker: str = "A",
+        token_pool: str = "all",
         force_dynamic: Optional[bool] = None,
         force_hop: Optional[int] = None,
         shuffle_study_content: bool = False,
     ) -> Tuple[List[int], Dict[str, int]]:
         dynamic = bool(self.rng.random() < p_dynamic) if force_dynamic is None else bool(force_dynamic)
-        chain = self._sample_chain(dynamic)
+        chain = self._sample_chain(dynamic, token_pool=token_pool)
         h = self._sample_hop(p_multi) if force_hop is None else int(force_hop)
         if h < 1 or h > self.cfg.k_max:
             raise ValueError(f"hop {h} outside [1, {self.cfg.k_max}]")
@@ -111,10 +143,6 @@ class ChainBatchGenerator:
             value_pos = len(seq) + 1
             seq.extend([key, value, self.cfg.sep_token])
 
-            # Positions are defined relative to the original unshuffled chain and
-            # only valid for uncorrupted diagnostics. For shuffled floor, these
-            # positions are still useful for distance bookkeeping but not for
-            # key-slot score.
             if not shuffle_study_content:
                 if i == s:
                     first_hop_key_pos = key_pos
@@ -154,6 +182,7 @@ class ChainBatchGenerator:
         p_dynamic: Optional[float] = None,
         p_multi: Optional[float] = None,
         query_marker: str = "A",
+        token_pool: str = "all",
         force_dynamic: Optional[bool] = None,
         force_hop: Optional[int] = None,
         shuffle_study_content: bool = False,
@@ -169,6 +198,7 @@ class ChainBatchGenerator:
                 p_dynamic=p_dynamic,
                 p_multi=p_multi,
                 query_marker=query_marker,
+                token_pool=token_pool,
                 force_dynamic=force_dynamic,
                 force_hop=force_hop,
                 shuffle_study_content=shuffle_study_content,
@@ -198,7 +228,7 @@ class ChainBatchGenerator:
             start_token=meta_tensor("start_token"),
         )
 
-    def diagnostic_keyslot_batch(self, batch_size: int, device=None) -> Batch:
+    def diagnostic_keyslot_batch(self, batch_size: int, device=None, token_pool: str = "all") -> Batch:
         """Held-out task-structured single-hop dynamic diagnostic set.
 
         This is the primary substrate for the key-slot lookup score. It is not the
@@ -209,6 +239,7 @@ class ChainBatchGenerator:
             p_dynamic=1.0,
             p_multi=0.0,
             query_marker="A",
+            token_pool=token_pool,
             force_dynamic=True,
             force_hop=1,
             shuffle_study_content=False,

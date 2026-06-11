@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, asdict
+from typing import Optional
 import json
 
 
@@ -15,6 +15,13 @@ class DataConfig:
 
     The model input is the full sequence except the final target. The supervised
     loss is masked to the final target prediction only.
+
+    Token pools:
+        all:   content tokens [0, v_content)
+        base:  first half of content tokens
+        fresh: second half of content tokens
+
+    The fresh/base split is used only for specificity controls; the main toy uses all.
     """
 
     v_content: int = 256
@@ -102,7 +109,21 @@ class TrainConfig:
     p_multi_before_intro: float = 0.0
     intro_step: Optional[int] = None
     dynamic_switch_step: Optional[int] = None
-    query_marker: str = "A"  # A or B
+
+    # Query-marker schedule. Main experiments use A. C7 late routing uses A before
+    # intro and B after intro, with both markers evaluated.
+    query_marker: str = "A"
+    query_marker_after_intro: Optional[str] = None
+    eval_query_b: bool = False
+
+    # Token-pool schedule. Main experiments use all. Fresh-single-hop controls can
+    # train on base before intro and fresh after intro, with both pools evaluated.
+    token_pool: str = "all"  # all | base | fresh
+    token_pool_after_intro: Optional[str] = None
+    eval_base_fresh: bool = False
+
+    # Rank/consolidation logging is useful for final replications but can be slow.
+    log_rank_metrics: bool = False
 
 
 def to_json(obj) -> str:
