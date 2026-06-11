@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Optional, Tuple
 import json
 
 
@@ -124,6 +124,12 @@ class TrainConfig:
 
     # Rank/consolidation logging is useful for final replications but can be slow.
     log_rank_metrics: bool = False
+
+    # Optional pre-step checkpoints for geometric diagnostics. A checkpoint at
+    # step s is saved before the training update for step s, so an intro-step
+    # checkpoint captures the conditioned starting location before HOP_2 batches.
+    checkpoint_steps: Tuple[int, ...] = ()
+    save_intro_checkpoint: bool = False
 
 
 def to_json(obj) -> str:

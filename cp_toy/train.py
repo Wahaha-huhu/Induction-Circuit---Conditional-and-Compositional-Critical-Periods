@@ -88,6 +88,20 @@ def reset_optimizer_state(opt: torch.optim.Optimizer) -> None:
     opt.state.clear()
 
 
+def _checkpoint_pre_steps(train_cfg: TrainConfig) -> set[int]:
+    steps = set(int(s) for s in getattr(train_cfg, "checkpoint_steps", ()) if int(s) >= 0)
+    if train_cfg.save_intro_checkpoint and train_cfg.intro_step is not None:
+        steps.add(int(train_cfg.intro_step))
+    return steps
+
+
+def _save_pre_step_checkpoint(model: TinyTransformer, out_dir: Path, step: int, train_cfg: TrainConfig) -> None:
+    path = out_dir / f"checkpoint_pre_step_{int(step)}.pt"
+    torch.save(model.state_dict(), path)
+    if train_cfg.intro_step is not None and int(step) == int(train_cfg.intro_step):
+        torch.save(model.state_dict(), out_dir / "checkpoint_pre_intro.pt")
+
+
 def _add_prefixed(dst: Dict[str, float], prefix: str, src: Dict[str, float]) -> None:
     for k, v in src.items():
         dst[f"{prefix}{k}"] = v
@@ -210,9 +224,12 @@ def train_run(
             sort_keys=True,
         )
 
+    checkpoint_steps = _checkpoint_pre_steps(train_cfg)
     log_path = out_dir / "metrics.jsonl"
     with open(log_path, "w", encoding="utf-8") as log_f:
         for step in range(train_cfg.max_steps):
+            if step in checkpoint_steps:
+                _save_pre_step_checkpoint(model, out_dir, step, train_cfg)
             model.train()
             optimizer_reset = False
             if should_reset_optimizer_state(step, sched_cfg):

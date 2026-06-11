@@ -146,6 +146,8 @@ def build_configs(args):
         token_pool_after_intro=token_pool_after_intro,
         eval_base_fresh=eval_base_fresh,
         log_rank_metrics=args.log_rank_metrics,
+        checkpoint_steps=tuple(args._checkpoint_steps_resolved),
+        save_intro_checkpoint=args.save_intro_checkpoint,
     )
     return data, model, optim, sched, train
 
@@ -196,8 +198,14 @@ def main():
     p.add_argument("--weight-decay", type=float, default=0.01)
     p.add_argument("--grad-clip", type=float, default=1.0)
     p.add_argument("--log-rank-metrics", action="store_true", help="Log weight/rank/update markers; slower but useful for replications")
+    p.add_argument("--save-intro-checkpoint", action="store_true", help="Save checkpoint_pre_intro.pt before the first intro-step update")
+    p.add_argument("--checkpoint-steps", default="", help="Comma-separated pre-step checkpoints, saved before each listed training step")
     p.add_argument("--no-final-summary", action="store_true", help="Do not print/save summary.json at end of run")
     args = p.parse_args()
+    if args.checkpoint_steps.strip():
+        args._checkpoint_steps_resolved = [int(x) for x in args.checkpoint_steps.split(",") if x.strip()]
+    else:
+        args._checkpoint_steps_resolved = []
     if args.torch_threads is not None:
         torch.set_num_threads(args.torch_threads)
 
