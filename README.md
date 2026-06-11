@@ -190,3 +190,9 @@ python scripts/pack_results.py \
   --runs-dir runs \
   --out cp_toy_c5b_rewarm_reset_seed0.zip
 ```
+
+## v0.9 behavioural replication update
+
+Use `scripts/run_behavioral_replication_v0_9.sh` to replicate the revised behavioural arms across seeds before relying on mechanism claims. See `RUN_BEHAVIOURAL_REPLICATION_V0_9.md`.
+
+Use `scripts/make_safe_geometry_report.py` to write a conservative report for reachability geometry outputs. Cross-run direction and injection analyses should be treated as exploratory unless the compared checkpoints share a common pre-introduction trajectory and the caveat is explicit.
