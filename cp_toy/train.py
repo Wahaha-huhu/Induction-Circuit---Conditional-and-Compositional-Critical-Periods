@@ -62,6 +62,20 @@ def set_optimizer_lr(opt: torch.optim.Optimizer, lr: float) -> None:
         group["lr"] = lr
 
 
+def should_reset_optimizer_state(step: int, sched_cfg: ScheduleConfig) -> bool:
+    """Whether to reset AdamW moment state at this step for C5b reset control."""
+    return (
+        sched_cfg.kind == "warmup_cosine_then_rewarm_constant_reset_optim"
+        and sched_cfg.rewarm_step is not None
+        and step == sched_cfg.rewarm_step
+    )
+
+
+def reset_optimizer_state(opt: torch.optim.Optimizer) -> None:
+    """Clear AdamW state while preserving parameters and param-group hyperparameters."""
+    opt.state.clear()
+
+
 def evaluate_core(
     model: TinyTransformer,
     gen: ChainBatchGenerator,
@@ -142,6 +156,10 @@ def train_run(
     with open(log_path, "w", encoding="utf-8") as log_f:
         for step in range(train_cfg.max_steps):
             model.train()
+            optimizer_reset = False
+            if should_reset_optimizer_state(step, sched_cfg):
+                reset_optimizer_state(opt)
+                optimizer_reset = True
             lr = lr_at_step(step, optim_cfg, sched_cfg)
             set_optimizer_lr(opt, lr)
             p_dyn = p_dynamic_at_step(step, train_cfg)
@@ -165,6 +183,7 @@ def train_run(
                 row = {
                     "step": step,
                     "lr": lr,
+                    "optimizer_reset": optimizer_reset,
                     "train_loss": float(loss.item()),
                     "train_acc": batch_accuracy(out["logits"].detach(), batch),
                     "p_dynamic": p_dyn,

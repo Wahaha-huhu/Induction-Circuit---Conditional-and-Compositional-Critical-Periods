@@ -154,3 +154,39 @@ or set:
 ```bash
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 ```
+
+
+## C5b Rewarm + Optimizer Reset Control (v0.3)
+
+This control follows S1 cosine decay before the dependent signal is introduced, then at `--intro-step` it both restores the LR and clears AdamW optimizer state. It tests whether the previous rewarm failure was due to optimizer-state inertia rather than model/weight history.
+
+```bash
+python scripts/run_condition.py \
+  --condition late_gate_post \
+  --seed 0 \
+  --device cuda \
+  --intro-step 16000 \
+  --max-steps 29500 \
+  --t-schedule 30000 \
+  --schedule warmup_cosine_then_rewarm_constant_reset_optim \
+  --rewarm-lr 1e-3 \
+  --v-content 64 \
+  --chain-length 8 \
+  --k-max 2 \
+  --p-multi 0.5 \
+  --batch-size 256 \
+  --eval-interval 50 \
+  --eval-batches 16 \
+  --peak-lr 1e-3 \
+  --out-dir runs/c5b_rewarm_reset_late
+
+python scripts/analyze_run.py runs/c5b_rewarm_reset_late/late_gate_post_seed0
+```
+
+Pack results:
+
+```bash
+python scripts/pack_results.py \
+  --runs-dir runs \
+  --out cp_toy_c5b_rewarm_reset_seed0.zip
+```

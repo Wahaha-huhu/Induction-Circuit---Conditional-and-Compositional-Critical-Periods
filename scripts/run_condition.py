@@ -114,7 +114,7 @@ def main():
     p.add_argument("--d-mlp", type=int, default=256)
     p.add_argument("--dropout", type=float, default=0.0)
 
-    p.add_argument("--schedule", choices=["warmup_cosine", "warmup_constant", "warmup_cyclic", "warmup_cosine_then_rewarm_constant"], default="warmup_cosine")
+    p.add_argument("--schedule", choices=["warmup_cosine", "warmup_constant", "warmup_cyclic", "warmup_cosine_then_rewarm_constant", "warmup_cosine_then_rewarm_constant_reset_optim"], default="warmup_cosine")
     p.add_argument("--t-schedule", type=int, default=20000)
     p.add_argument("--cycle-length", type=int, default=2000)
     p.add_argument("--rewarm-step", type=int, default=None, help="Step where rewarm schedule switches to constant LR; defaults to --intro-step")
@@ -126,10 +126,10 @@ def main():
     if args.torch_threads is not None:
         torch.set_num_threads(args.torch_threads)
 
-    if args.schedule == "warmup_cosine_then_rewarm_constant":
+    if args.schedule in {"warmup_cosine_then_rewarm_constant", "warmup_cosine_then_rewarm_constant_reset_optim"}:
         if args.rewarm_step is None:
             if args.intro_step is None:
-                raise ValueError("warmup_cosine_then_rewarm_constant requires --rewarm-step or --intro-step")
+                raise ValueError("rewarm schedules require --rewarm-step or --intro-step")
             args.rewarm_step = args.intro_step
 
     cfgs = build_configs(args)

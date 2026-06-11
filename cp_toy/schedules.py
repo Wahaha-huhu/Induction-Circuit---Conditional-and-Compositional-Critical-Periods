@@ -17,10 +17,12 @@ def lr_at_step(step: int, optim: OptimConfig, sched: ScheduleConfig) -> float:
         progress = min(1.0, max(0.0, (step - optim.warmup_steps) / denom))
         return optim.final_lr + 0.5 * (optim.peak_lr - optim.final_lr) * (1.0 + math.cos(math.pi * progress))
 
-    if sched.kind == "warmup_cosine_then_rewarm_constant":
-        # C5b-1 rewarm control. Before rewarm_step, follow the same cosine
+    if sched.kind in {"warmup_cosine_then_rewarm_constant", "warmup_cosine_then_rewarm_constant_reset_optim"}:
+        # C5b-1/C5b-1b rewarm controls. Before rewarm_step, follow the same cosine
         # decay as S1. From rewarm_step onward, restore a constant LR.
         # This tests whether late failure is just low instantaneous/update LR.
+        # The *_reset_optim variant uses the same LR function but resets AdamW state
+        # at rewarm_step inside the training loop.
         rewarm_step = sched.rewarm_step
         if rewarm_step is None:
             raise ValueError("warmup_cosine_then_rewarm_constant requires sched.rewarm_step")
