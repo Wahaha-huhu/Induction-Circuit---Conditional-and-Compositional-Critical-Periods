@@ -1,0 +1,67 @@
+{
+  "data": {
+    "chain_length": 8,
+    "fixed_chain_seed": 12345,
+    "hop_token_offset": 260,
+    "k_max": 2,
+    "p_dynamic": 1.0,
+    "p_multi": 0.5,
+    "query_a_token": 257,
+    "query_b_token": 258,
+    "query_mem_token": 259,
+    "sep_token": 256,
+    "v_content": 64
+  },
+  "model": {
+    "d_mlp": 256,
+    "d_model": 128,
+    "dropout": 0.0,
+    "n_heads": 4,
+    "n_layers": 4,
+    "seq_len": 24,
+    "vocab_size": 263
+  },
+  "optim": {
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "final_lr": 5e-06,
+    "grad_clip": 1.0,
+    "peak_lr": 0.001,
+    "warmup_steps": 500,
+    "weight_decay": 0.01
+  },
+  "parameter_count": 598528,
+  "schedule": {
+    "cycle_length": 2000,
+    "cycle_min_lr_frac": 0.1,
+    "kind": "warmup_cosine_then_rewarm_constant_reset_optim",
+    "rewarm_lr": 0.001,
+    "rewarm_step": 16000,
+    "t_schedule": 30000
+  },
+  "train": {
+    "batch_size": 256,
+    "checkpoint_steps": [],
+    "device": "cuda",
+    "dynamic_switch_step": null,
+    "eval_base_fresh": false,
+    "eval_batches": 16,
+    "eval_interval": 50,
+    "eval_query_b": false,
+    "intro_step": 16000,
+    "log_interval": 50,
+    "log_rank_metrics": false,
+    "max_steps": 36000,
+    "out_dir": "runs/behavioral_replication_v0_9/s7/rewarm_reset_late/late_gate_post_seed7",
+    "p_dynamic_high": 1.0,
+    "p_dynamic_low": 0.05,
+    "p_multi_before_intro": 0.0,
+    "p_multi_frozen": 0.5,
+    "query_marker": "A",
+    "query_marker_after_intro": null,
+    "save_intro_checkpoint": false,
+    "seed": 7,
+    "token_pool": "all",
+    "token_pool_after_intro": null
+  }
+}
