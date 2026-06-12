@@ -20,3 +20,21 @@ def test_keyslot_positions_are_in_input():
     assert (b.key_value_pos < cfg.input_seq_len).all()
     assert (b.query_pos == cfg.query_start_input_pos).all()
     assert (b.hop == 1).all()
+
+
+def test_twohop_positions_are_in_input_and_ordered_by_chain_not_binding_order():
+    cfg = DataConfig(v_content=64, chain_length=8, k_max=2, sep_token=64, query_a_token=65, query_b_token=66, query_mem_token=67, hop_token_offset=68)
+    gen = ChainBatchGenerator(cfg, seed=2)
+    b = gen.batch(32, p_dynamic=1.0, p_multi=1.0, force_hop=2)
+    assert (b.hop == 2).all()
+    assert (b.first_hop_value_pos >= 0).all()
+    assert (b.first_hop_value_pos < cfg.input_seq_len).all()
+    assert (b.second_hop_value_pos >= 0).all()
+    assert (b.second_hop_value_pos < cfg.input_seq_len).all()
+    assert (b.second_hop_key_pos >= 0).all()
+    assert (b.second_hop_key_pos < cfg.input_seq_len).all()
+    # The second-hop key token is the intermediate B, and the second-hop value is the final target C.
+    import torch
+    idx = torch.arange(b.input_ids.shape[0])
+    assert torch.equal(b.input_ids[idx, b.second_hop_key_pos.cpu()], b.intermediate_token.cpu())
+    assert torch.equal(b.input_ids[idx, b.second_hop_value_pos.cpu()], b.target.cpu())

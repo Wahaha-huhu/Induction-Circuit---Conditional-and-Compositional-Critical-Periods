@@ -151,6 +151,65 @@ def key_slot_lookup_scores(
     return (accum / max(1, count)).detach().cpu()
 
 
+
+@torch.no_grad()
+def two_hop_attention_scores(
+    model: TinyTransformer,
+    gen: ChainBatchGenerator,
+    batch_size: int,
+    num_batches: int,
+    device: torch.device | str,
+    token_pool: str = "all",
+) -> Dict[str, torch.Tensor]:
+    """Attention diagnostics for HOP_2 decomposition.
+
+    Returns layer-head score tensors [n_layers, n_heads] for a forced HOP_2
+    batch.  For a chain A -> B -> C queried as HOP_2(A):
+
+    - ``first_value`` measures attention from the query position to the B value
+      slot in the first binding A->B.  This is the old key-slot-style score,
+      but evaluated on HOP_2 examples.
+    - ``second_value`` measures attention from the query position to the C value
+      slot in the second binding B->C.  This is the proposed second-hop score.
+    - ``second_key`` measures attention to the B key slot of the second binding.
+      It is included as a diagnostic, because some implementations may attend
+      to the key token rather than directly to the value token.
+    """
+    if gen.cfg.k_max < 2:
+        raise ValueError("two_hop_attention_scores requires k_max >= 2")
+    model.eval()
+    cfg = model.cfg
+    names = ["first_value", "second_value", "second_key"]
+    accum = {name: torch.zeros(cfg.n_layers, cfg.n_heads, device=device) for name in names}
+    count = 0
+    head_idx = torch.arange(cfg.n_heads, device=device)
+    for _ in range(num_batches):
+        batch = gen.batch(
+            batch_size=batch_size,
+            p_dynamic=1.0,
+            p_multi=0.0,
+            query_marker="A",
+            token_pool=token_pool,
+            force_dynamic=True,
+            force_hop=2,
+            shuffle_study_content=False,
+            device=device,
+        )
+        out = model(batch.input_ids, return_attn=True)
+        qpos = batch.query_pos
+        pos = {
+            "first_value": batch.first_hop_value_pos,
+            "second_value": batch.second_hop_value_pos,
+            "second_key": batch.second_hop_key_pos.clamp_min(0),
+        }
+        b_idx = torch.arange(batch.input_ids.shape[0], device=device)
+        for layer_idx, attn in enumerate(out["attns"]):  # B,H,T,T
+            for name in names:
+                vals = attn[b_idx[:, None], head_idx[None, :], qpos[:, None], pos[name][:, None]]
+                accum[name][layer_idx] += vals.sum(dim=0)
+        count += batch.input_ids.shape[0]
+    return {name: (tensor / max(1, count)).detach().cpu() for name, tensor in accum.items()}
+
 def top_heads_from_scores(scores: torch.Tensor, k: int = 1) -> HeadSelection:
     """Select top-k heads over all layer-head pairs, not per layer."""
     flat = scores.flatten()

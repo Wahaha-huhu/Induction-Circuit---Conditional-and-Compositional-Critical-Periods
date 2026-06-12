@@ -17,10 +17,15 @@ class Batch:
     target: torch.Tensor          # [B]
     hop: torch.Tensor             # [B]
     is_dynamic: torch.Tensor      # [B]
-    key_value_pos: torch.Tensor   # [B], value position for the first hop key-slot lookup
+    key_value_pos: torch.Tensor   # [B], value position for the first hop key-slot lookup (legacy alias)
     query_pos: torch.Tensor       # [B], query start content position in input_ids
     distance_max: torch.Tensor    # [B]
     start_token: torch.Tensor     # [B]
+    first_hop_key_pos: torch.Tensor    # [B], key position for first edge A->B
+    first_hop_value_pos: torch.Tensor  # [B], value position B for first edge A->B
+    second_hop_key_pos: torch.Tensor   # [B], key position for second edge B->C; -1 for HOP_1
+    second_hop_value_pos: torch.Tensor # [B], value position C for second edge B->C; first value for HOP_1
+    intermediate_token: torch.Tensor   # [B], B for HOP_2, target for HOP_1
 
 
 class ChainBatchGenerator:
@@ -125,6 +130,8 @@ class ChainBatchGenerator:
         seq: List[int] = []
         first_hop_value_pos: Optional[int] = None
         first_hop_key_pos: Optional[int] = None
+        second_hop_value_pos: Optional[int] = None
+        second_hop_key_pos: Optional[int] = None
         all_hop_value_positions: List[int] = []
 
         # Optional shuffled-content floor: corrupt the study content but keep the
@@ -147,6 +154,9 @@ class ChainBatchGenerator:
                 if i == s:
                     first_hop_key_pos = key_pos
                     first_hop_value_pos = value_pos
+                if h >= 2 and i == s + 1:
+                    second_hop_key_pos = key_pos
+                    second_hop_value_pos = value_pos
                 if s <= i < s + h:
                     all_hop_value_positions.append(value_pos)
 
@@ -159,6 +169,11 @@ class ChainBatchGenerator:
             # zero rather than failing batch construction.
             first_hop_value_pos = 0
             first_hop_key_pos = 0
+        if second_hop_value_pos is None:
+            # For HOP_1 diagnostics there is no second edge.  Use the first value
+            # as a harmless placeholder and set the second key to -1.
+            second_hop_value_pos = int(first_hop_value_pos)
+            second_hop_key_pos = -1
         query_pos = self.cfg.query_start_input_pos
         if all_hop_value_positions:
             distance_max = max(abs(query_pos - p) for p in all_hop_value_positions)
@@ -173,6 +188,11 @@ class ChainBatchGenerator:
             "query_pos": int(query_pos),
             "distance_max": int(distance_max),
             "start_token": start,
+            "first_hop_key_pos": int(first_hop_key_pos),
+            "first_hop_value_pos": int(first_hop_value_pos),
+            "second_hop_key_pos": int(second_hop_key_pos),
+            "second_hop_value_pos": int(second_hop_value_pos),
+            "intermediate_token": int(chain[s + 1]) if h >= 2 else target,
         }
         return seq, meta
 
@@ -226,6 +246,11 @@ class ChainBatchGenerator:
             query_pos=meta_tensor("query_pos"),
             distance_max=meta_tensor("distance_max"),
             start_token=meta_tensor("start_token"),
+            first_hop_key_pos=meta_tensor("first_hop_key_pos"),
+            first_hop_value_pos=meta_tensor("first_hop_value_pos"),
+            second_hop_key_pos=meta_tensor("second_hop_key_pos"),
+            second_hop_value_pos=meta_tensor("second_hop_value_pos"),
+            intermediate_token=meta_tensor("intermediate_token"),
         )
 
     def diagnostic_keyslot_batch(self, batch_size: int, device=None, token_pool: str = "all") -> Batch:
