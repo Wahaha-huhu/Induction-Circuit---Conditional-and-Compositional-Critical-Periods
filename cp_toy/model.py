@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -35,6 +35,7 @@ class CausalSelfAttention(nn.Module):
         return_head_outputs: bool = False,
         ablate_heads: Optional[HeadSelection] = None,
         ablation_means: Optional[AblationMeans] = None,
+        patch_head_outputs: Optional[Dict[int, Dict[str, Any]]] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         B, T, C = x.shape
         qkv = self.qkv(x)
@@ -58,6 +59,37 @@ class CausalSelfAttention(nn.Module):
                     head_out[:, h, :, :] = mean_vec.view(1, 1, self.d_head)
                 else:
                     head_out[:, h, :, :] = 0.0
+
+        # Optional activation patching for mechanistic diagnostics.  A patch spec
+        # is a dict with:
+        #   source: clean head outputs [B,H,T,Dh]
+        #   heads: optional list of heads to patch; default all heads
+        #   positions: optional int/list/tensor positions to patch; default all positions
+        # This is intentionally disabled by default and used only by analysis scripts.
+        if patch_head_outputs and layer_idx in patch_head_outputs:
+            spec = patch_head_outputs[layer_idx]
+            source = spec["source"].to(head_out.device, head_out.dtype)
+            heads = spec.get("heads", None)
+            positions = spec.get("positions", None)
+            if heads is None:
+                heads = list(range(self.n_heads))
+            if isinstance(heads, int):
+                heads = [heads]
+            if positions is None:
+                head_out[:, heads, :, :] = source[:, heads, :, :]
+            else:
+                if isinstance(positions, int):
+                    head_out[:, heads, positions, :] = source[:, heads, positions, :]
+                else:
+                    pos_t = torch.as_tensor(positions, device=head_out.device, dtype=torch.long)
+                    if pos_t.ndim == 0:
+                        head_out[:, heads, int(pos_t.item()), :] = source[:, heads, int(pos_t.item()), :]
+                    elif pos_t.ndim == 1 and pos_t.numel() == B:
+                        b_idx = torch.arange(B, device=head_out.device)
+                        for h in heads:
+                            head_out[b_idx, h, pos_t, :] = source[b_idx, h, pos_t, :]
+                    else:
+                        head_out[:, heads, pos_t, :] = source[:, heads, pos_t, :]
 
         y = head_out.transpose(1, 2).contiguous().view(B, T, C)
         y = self.out(y)
@@ -85,6 +117,7 @@ class Block(nn.Module):
         return_head_outputs: bool = False,
         ablate_heads: Optional[HeadSelection] = None,
         ablation_means: Optional[AblationMeans] = None,
+        patch_head_outputs: Optional[Dict[int, Dict[str, Any]]] = None,
     ):
         attn_out, attn, head_out = self.attn(
             self.ln1(x),
@@ -93,6 +126,7 @@ class Block(nn.Module):
             return_head_outputs=return_head_outputs,
             ablate_heads=ablate_heads,
             ablation_means=ablation_means,
+            patch_head_outputs=patch_head_outputs,
         )
         x = x + attn_out
         x = x + self.mlp(self.ln2(x))
@@ -127,6 +161,9 @@ class TinyTransformer(nn.Module):
         return_head_outputs: bool = False,
         ablate_heads: Optional[HeadSelection] = None,
         ablation_means: Optional[AblationMeans] = None,
+        return_residuals: bool = False,
+        patch_residuals: Optional[Dict[int, Dict[str, Any]]] = None,
+        patch_head_outputs: Optional[Dict[int, Dict[str, Any]]] = None,
     ):
         B, T = input_ids.shape
         if T > self.cfg.seq_len:
@@ -136,6 +173,7 @@ class TinyTransformer(nn.Module):
 
         attns: List[torch.Tensor] = []
         head_outputs: List[torch.Tensor] = []
+        residuals: List[torch.Tensor] = []
         for layer_idx, block in enumerate(self.blocks):
             x, attn, head_out = block(
                 x,
@@ -144,7 +182,30 @@ class TinyTransformer(nn.Module):
                 return_head_outputs=return_head_outputs,
                 ablate_heads=ablate_heads,
                 ablation_means=ablation_means,
+                patch_head_outputs=patch_head_outputs,
             )
+            # Optional residual-stream patch after this block.  Spec:
+            #   source: clean residual [B,T,C]
+            #   positions: optional int/list/tensor; default all positions
+            if patch_residuals and layer_idx in patch_residuals:
+                spec = patch_residuals[layer_idx]
+                source = spec["source"].to(x.device, x.dtype)
+                positions = spec.get("positions", None)
+                if positions is None:
+                    x = source.clone()
+                elif isinstance(positions, int):
+                    x[:, positions, :] = source[:, positions, :]
+                else:
+                    pos_t = torch.as_tensor(positions, device=x.device, dtype=torch.long)
+                    if pos_t.ndim == 0:
+                        x[:, int(pos_t.item()), :] = source[:, int(pos_t.item()), :]
+                    elif pos_t.ndim == 1 and pos_t.numel() == B:
+                        b_idx = torch.arange(B, device=x.device)
+                        x[b_idx, pos_t, :] = source[b_idx, pos_t, :]
+                    else:
+                        x[:, pos_t, :] = source[:, pos_t, :]
+            if return_residuals:
+                residuals.append(x.detach())
             if return_attn:
                 attns.append(attn)
             if return_head_outputs:
@@ -156,6 +217,8 @@ class TinyTransformer(nn.Module):
             out["attns"] = attns
         if return_head_outputs:
             out["head_outputs"] = head_outputs
+        if return_residuals:
+            out["residuals"] = residuals
         return out
 
 
