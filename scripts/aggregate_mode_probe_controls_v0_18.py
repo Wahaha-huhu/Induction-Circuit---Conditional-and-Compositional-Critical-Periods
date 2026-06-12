@@ -85,7 +85,7 @@ def main() -> None:
             'max_true_probe_eval_acc': true_vals[max_idx],
             'matched_shuffled_acc_at_best_layer': shuf_vals[max_idx],
             'max_probe_acc_above_shuffle': max([v for v in above_vals if v is not None], default=None),
-            'max_lens_acc': max([num(v) for r in rs for k,v in r.items() if k.endswith('_lens_acc') and label.split('_')[-1] in k], default=None),
+            'max_lens_acc': max([v for v in [num(v) for r in rs for k,v in r.items() if k.endswith('_lens_acc') and label.split('_')[-1] in k] if v is not None], default=None),
         })
     with out_run.open('w', newline='', encoding='utf-8') as f:
         fields = list(run_summary[0].keys()) if run_summary else []
