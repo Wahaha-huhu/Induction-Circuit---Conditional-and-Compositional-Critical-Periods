@@ -196,3 +196,7 @@ python scripts/pack_results.py \
 Use `scripts/run_behavioral_replication_v0_9.sh` to replicate the revised behavioural arms across seeds before relying on mechanism claims. See `RUN_BEHAVIOURAL_REPLICATION_V0_9.md`.
 
 Use `scripts/make_safe_geometry_report.py` to write a conservative report for reachability geometry outputs. Cross-run direction and injection analyses should be treated as exploratory unless the compared checkpoints share a common pre-introduction trajectory and the caveat is explicit.
+
+## v0.20 mixed-from-start feasibility sweep
+
+See `RUN_MIXED_FROM_START_SWEEP_V0_20.md`. This sweep trains with fixed `p_multi` from step 0, rather than staging HOP_2 after HOP_1. It includes a p_multi grid and a long p_multi=0.5 run.
