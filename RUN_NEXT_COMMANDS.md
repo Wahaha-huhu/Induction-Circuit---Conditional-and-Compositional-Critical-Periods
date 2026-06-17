@@ -307,3 +307,7 @@ For all runs under a directory, run:
 ```bash
 python scripts/summarize_runs.py --runs-dir runs --out runs/all_run_summaries.csv
 ```
+
+## v0.21 HOP_2-only scale control
+
+See `RUN_HOP2_ONLY_SCALE_V0_21.md`.
